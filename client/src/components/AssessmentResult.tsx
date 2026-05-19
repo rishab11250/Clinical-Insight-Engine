@@ -85,10 +85,10 @@ export function AssessmentResult({ assessment }: AssessmentResultProps) {
             >
               {/* Patient Hero */}
               <div className="text-center space-y-4 max-w-2xl mx-auto">
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground">Your Health Assessment</h2>
-                <div className={`inline-flex flex-col items-center justify-center w-36 h-36 sm:w-48 sm:h-48rounded-full border-8 shadow-inner ${getRiskColor(assessment.riskCategory)}`}>
+                <h2 className="text-2xl font-bold text-foreground">Your Health Assessment</h2>
+                <div className={`inline-flex flex-col items-center justify-center w-48 h-48 rounded-full border-8 shadow-inner ${getRiskColor(assessment.riskCategory)}`}>
                   <span className="text-sm font-bold uppercase tracking-widest opacity-80 mb-1">Risk Level</span>
-                  <span className="text-3xl sm:text-4xl font-display font-black">{assessment.riskCategory}</span>
+                  <span className="text-4xl font-display font-black">{assessment.riskCategory}</span>
                 </div>
                 <p className="text-muted-foreground text-lg">
                   Based on your provided information, your cardiovascular risk over the next 10 years is considered <strong>{assessment.riskCategory.toLowerCase()}</strong>.
@@ -154,7 +154,7 @@ export function AssessmentResult({ assessment }: AssessmentResultProps) {
                 </div>
                 <div className="bg-card border border-border p-5 rounded-xl shadow-sm">
                   <p className="text-sm font-medium text-muted-foreground mb-1">Patient Vitals summary</p>
-                  <div className="flex flex-col sm:flex-row gap-4 mt-2">
+                  <div className="flex gap-4 mt-2">
                     <div>
                       <p className="text-xs text-muted-foreground">BMI</p>
                       <p className="font-semibold">{assessment.bmi}</p>
@@ -168,16 +168,16 @@ export function AssessmentResult({ assessment }: AssessmentResultProps) {
               </div>
 
               {/* Clinician Chart */}
-              <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm overflow-hidden">
+              <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
                 <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-primary" /> Factor Coefficient Impact
                 </h3>
-                <div className="h-56 sm:h-64 w-full overflow-x-auto">
+                <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                       <ReferenceLine x={0} stroke="#cbd5e1" />
                       <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={80} tick={{ fill: '#64748b', fontSize: 12 }} />
+                      <YAxis dataKey="name" type="category" width={120} tick={{ fill: '#64748b', fontSize: 12 }} />
                       <Tooltip 
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
@@ -196,7 +196,7 @@ export function AssessmentResult({ assessment }: AssessmentResultProps) {
                         }}
                       />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                        {chartData.map((entry: any, index: number) => (
+                        {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.impact === 'positive' ? '#ef4444' : '#22c55e'} />
                         ))}
                       </Bar>

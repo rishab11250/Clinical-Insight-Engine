@@ -5,7 +5,7 @@ import { z } from "zod";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AssessmentResult } from "@/components/AssessmentResult";
 import { useCreateAssessment } from "@/hooks/use-assessments";
-import { Activity, Loader2, AlertCircle, UserCircle } from "lucide-react";
+import { Activity, Loader2, AlertCircle } from "lucide-react";
 import { type AssessmentResponse } from "@shared/routes";
 
 // Form schema aligned with the backend insert schema
@@ -91,13 +91,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-          {isPending && (
-            <div className="mb-6 animate-pulse space-y-4">
-            <div className="h-6 bg-muted rounded w-1/3"></div>
-            <div className="h-24 bg-muted rounded-xl"></div>
-            <div className="h-24 bg-muted rounded-xl"></div>
-           </div>
-          )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left Column: Demographics */}
               <div className="space-y-6">
@@ -154,7 +148,7 @@ export default function Dashboard() {
                   <Activity className="w-5 h-5 text-primary" /> Vitals & History
                 </h3>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-foreground">BMI (kg/m²)</label>
                     <input 
@@ -247,3 +241,5 @@ export default function Dashboard() {
   );
 }
 
+// Ensure icons used in file are imported:
+import { UserCircle } from "lucide-react";
