@@ -30,10 +30,10 @@ export const assessments = pgTable("assessments", {
 });
 
 export const insertAssessmentSchema = createInsertSchema(assessments, {
-  age: z.coerce.number().min(0).max(120),
-  bmi: z.coerce.number().min(10).max(100),
-  hba1cLevel: z.coerce.number().min(3).max(20),
-  bloodGlucoseLevel: z.coerce.number().min(50).max(500),
+  age: z.coerce.number().min(1).max(120),
+  bmi: z.coerce.number().min(10).max(60),
+  hba1cLevel: z.coerce.number().min(3).max(15),
+  bloodGlucoseLevel: z.coerce.number().min(50).max(400),
   hypertension: z.boolean(),
   heartDisease: z.boolean(),
 }).omit({

@@ -7,14 +7,22 @@ import { AssessmentResult } from "@/components/AssessmentResult";
 import { useCreateAssessment } from "@/hooks/use-assessments";
 import { Activity, AlertCircle, Clock3, Loader2, ShieldCheck, TrendingUp, UserCircle } from "lucide-react";
 import { type AssessmentResponse } from "@shared/routes";
+import { insertAssessmentSchema } from "@shared/schema";
 
-// Form schema aligned with the backend insert schema
-const formSchema = z.object({
+// Form schema using shared schema as source of truth with custom error messages
+const formSchema = insertAssessmentSchema.pick({
+  gender: true,
+  age: true,
+  hypertension: true,
+  heartDisease: true,
+  smokingHistory: true,
+  bmi: true,
+  hba1cLevel: true,
+  bloodGlucoseLevel: true,
+}).extend({
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Please select a gender" }),
-  age: z.coerce.number().min(1, "Age must be greater than 0").max(120, "Age is too high"),
-  hypertension: z.boolean().default(false),
-  heartDisease: z.boolean().default(false),
   smokingHistory: z.enum(["never", "No Info", "current", "former", "ever", "not current"], { required_error: "Please select smoking history" }),
+  age: z.coerce.number().min(1, "Age must be greater than 0").max(120, "Age is too high"),
   bmi: z.coerce.number().min(10, "BMI must be between 10 and 60").max(60, "BMI must be between 10 and 60"),
   hba1cLevel: z.coerce.number().min(3, "HbA1c must be between 3 and 15").max(15, "HbA1c must be between 3 and 15"),
   bloodGlucoseLevel: z.coerce.number().min(50, "Blood glucose must be between 50 and 400").max(400, "Blood glucose must be between 50 and 400"),
