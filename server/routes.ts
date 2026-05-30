@@ -213,7 +213,8 @@ export async function registerRoutes(
           let prediction;
 
           try {
-            prediction = JSON.parse(stdout.trim());
+            const lines = stdout.trim().split('\n').filter(Boolean);
+            prediction = JSON.parse(lines[lines.length - 1]);
           } catch (e) {
             console.error(
               "Failed to parse python output (preview):",
@@ -320,7 +321,8 @@ export async function registerRoutes(
           let prediction;
 
           try {
-            prediction = JSON.parse(stdout.trim());
+            const lines = stdout.trim().split('\n').filter(Boolean);
+            prediction = JSON.parse(lines[lines.length - 1]);
 
             if (prediction.error) {
               return res.status(400).json({
