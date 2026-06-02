@@ -54,13 +54,13 @@ export function AssessmentResult({ assessment }: AssessmentResultProps) {
   const [isPresenting, setIsPresenting] = useState(false);
 
   const exportToJson = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(assessment, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `diabetes-risk-assessment-${assessment.id ?? "report"}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    const blob = new Blob([JSON.stringify(assessment, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `diabetes-risk-assessment-${assessment.id ?? "report"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const getRiskColor = (category: string) => {
