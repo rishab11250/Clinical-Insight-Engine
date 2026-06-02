@@ -397,8 +397,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(api.assessments.list.path, requireAuth, requireVerified, async (req, res) => {
     try {
       const userEmail = req.session.user?.email;
-      const assessments = await storage.getAssessments(50, 0, userEmail);
-      return res.json(assessments);
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const assessments = await storage.getAssessments(limit, offset, userEmail);
+
+      res.json(assessments);
+
     } catch (err) {
       return res.status(500).json({ message: "Failed to fetch assessments" });
     }
