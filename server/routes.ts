@@ -746,6 +746,7 @@ export async function registerRoutes(
         );
 
         return res.json(results);
+
       } catch (err) {
         // 4. Sanitize DB errors — never expose table names, SQL syntax, or stack traces
         console.error("Assessment search error:", err);
@@ -803,7 +804,6 @@ export async function registerRoutes(
             false,
             "IDOR attempt: User not authorized to access this patient record"
           );
-
           // Return 404 to prevent ID enumeration
           return res.status(404).json({ message: "Assessment not found." });
         }
