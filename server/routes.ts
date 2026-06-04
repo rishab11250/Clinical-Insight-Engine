@@ -408,6 +408,9 @@ export async function registerRoutes(
 
   app.use("/api/assessments", mlRouter);
   app.use("/api/assessments", exportsRouter);
+  app.use("/api/assessments", analyticsRouter);
+  // ─── Admin Routes ────────────────────────────────────────────────
+
   app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);

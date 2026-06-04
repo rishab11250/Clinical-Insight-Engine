@@ -15,6 +15,7 @@ import {
 import { searchQuerySchema } from "../validation/searchValidation";
 import { canAccessPatientRecord } from "../services/authz/patient-access";
 import { logAccessAttempt } from "../security/access-audit";
+import { validateDTO } from "../middleware/validateDTO";
 
 const assessmentsRouter = Router();
 
@@ -45,9 +46,10 @@ assessmentsRouter.post(
   requireAuth,
   requireVerified,
   previewLimiter,
+  validateDTO(api.assessments.preview.input),
   async (req, res) => {
     try {
-      const input = api.assessments.preview.input.parse(req.body);
+      const input = req.body;
       const { prediction } = await MLService.runAssessmentInference(input);
 
       return res.json({
@@ -76,6 +78,7 @@ assessmentsRouter.post(
   requireAuth,
   requireVerified,
   assessmentLimiter,
+  validateDTO(api.assessments.create.input),
   async (req, res) => {
     const userId = (req.session.user as any)?.id;
     if (!userId) {
@@ -83,6 +86,35 @@ assessmentsRouter.post(
     }
 
     try {
+      const input = req.body;
+      requestFingerprint = MLService.generateRequestFingerprint(input, userId);
+
+      if (MLService.activeInferenceRequests.has(requestFingerprint)) {
+        return res.status(409).json({
+          message: "An identical assessment request is already being processed.",
+        });
+      }
+      MLService.activeInferenceRequests.add(requestFingerprint);
+
+      const { prediction, isFallback } = await MLService.runAssessmentInference(input);
+
+      prediction.disclaimer =
+        "DISCLAIMER: This is a clinical decision support tool and is not a medical diagnosis. Please consult with a healthcare professional for clinical decisions." +
+        (isFallback
+          ? " (Generated via fallback rule-based clinical support model due to system unavailability)"
+          : "");
+
+      const assessment = await storage.createAssessment({
+        ...input,
+        riskScore: Number(prediction.riskScore),
+        riskCategory: prediction.riskCategory,
+        factors: prediction.factors,
+        confidenceInterval: prediction.confidenceInterval ?? undefined,
+        modelConfidence:
+          prediction.modelConfidence == null
+            ? undefined
+            : Number(prediction.modelConfidence),
+        createdBy: userId,
       const input = api.assessments.create.input.parse(req.body);
       
       const job = await assessmentQueue.add("predict", {
