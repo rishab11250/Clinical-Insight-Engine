@@ -62,10 +62,11 @@ export default function Dashboard() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const { mutate: createAssessment, isPending, error } = useCreateAssessment();
 
-  const { data: assessments } = useAssessments();
+  const { data: infiniteData } = useAssessments();
+  const assessments = infiniteData ? infiniteData.pages.flatMap((page) => page.data) : [];
 
   const stats = useMemo(() => {
-    const list = assessments?.data ?? ([] as AssessmentResponse[]);
+    const list = assessments ?? [];
     const total = list.length;
     const avgRisk = total > 0 ? list.reduce((sum, item) => sum + Number(item.riskScore), 0) / total : 0;
     const highRisk = total > 0 ? (list.filter(item => (item.riskCategory || "").toUpperCase() === "HIGH").length / total) * 100 : 0;
@@ -90,6 +91,7 @@ export default function Dashboard() {
       patientName: "",
       hypertension: false,
       heartDisease: false,
+      patientName: "",
       smokingHistory: "never",
       gender: "Female",
       age: undefined,
@@ -190,14 +192,10 @@ export default function Dashboard() {
   // Autosave draft on form changes
   const formData = watch();
   useEffect(() => {
-    if (result) return;
     if (formData && (formData.patientName || formData.age || formData.bmi || formData.hba1cLevel || formData.bloodGlucoseLevel || formData.hypertension || formData.heartDisease)) {
-      const timer = setTimeout(() => {
-        localStorage.setItem("clinical-insight-assessment-draft", JSON.stringify(formData));
-      }, 500);
-      return () => clearTimeout(timer);
+      localStorage.setItem("clinical-insight-assessment-draft", JSON.stringify(formData));
     }
-  }, [formData, result]);
+  }, [formData]);
 
   return (
     <AppLayout>
@@ -360,7 +358,7 @@ export default function Dashboard() {
                         <div className="relative">
                           <input type="number" step="0.1" {...register("bmi")} className={getInputClass(!!errors.bmi)} placeholder="e.g. 25.0" />
                           {watchedValues.bmi && (
-                            <button type="button" onClick={() => setValue("bmi", undefined as any, { shouldValidate: true, shouldDirty: true })} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-white">
+                            <button type="button" onClick={() => setValue("bmi", undefined, { shouldValidate: true, shouldDirty: true })} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-white">
                               <X className="w-4 h-4" />
                             </button>
                           )}
@@ -391,7 +389,7 @@ export default function Dashboard() {
                         <div className="relative">
                           <input type="number" step="0.1" {...register("hba1cLevel")} className={getInputClass(!!errors.hba1cLevel)} placeholder="e.g. 5.7" />
                           {watchedValues.hba1cLevel && (
-                            <button type="button" onClick={() => setValue("hba1cLevel", undefined as any, { shouldValidate: true, shouldDirty: true })} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-white">
+                            <button type="button" onClick={() => setValue("hba1cLevel", undefined, { shouldValidate: true, shouldDirty: true })} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-white">
                               <X className="w-4 h-4" />
                             </button>
                           )}
@@ -421,7 +419,7 @@ export default function Dashboard() {
                         <div className="relative">
                           <input type="number" {...register("bloodGlucoseLevel")} className={getInputClass(!!errors.bloodGlucoseLevel)} placeholder="e.g. 100" />
                           {watchedValues.bloodGlucoseLevel && (
-                            <button type="button" onClick={() => setValue("bloodGlucoseLevel", undefined as any, { shouldValidate: true, shouldDirty: true })} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-white">
+                            <button type="button" onClick={() => setValue("bloodGlucoseLevel", undefined, { shouldValidate: true, shouldDirty: true })} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-white">
                               <X className="w-4 h-4" />
                             </button>
                           )}
@@ -511,33 +509,17 @@ export default function Dashboard() {
                     Complete required fields to see live risk prediction.
                   </p>
                 )}
+
                 {previewPending && (
-                  <div className="animate-pulse space-y-5" aria-hidden="true">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col items-center">
-                      <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded mb-3" />
-                      <div className="h-10 w-24 bg-slate-300 dark:bg-slate-600 rounded mb-3" />
-                      <div className="h-6 w-20 bg-slate-200 dark:bg-slate-700 rounded-full" />
-                    </div>
-                    <div className="space-y-3">
-                      <div className="h-3 w-20 bg-slate-200 dark:bg-slate-700 rounded" />
-                      <div className="space-y-2">
-                        {[1, 2].map((i) => (
-                          <div key={i} className="rounded-xl border border-slate-200 p-3 bg-white/50">
-                            <div className="flex justify-between items-center mb-2">
-                              <div className="h-4 w-28 bg-slate-300 dark:bg-slate-600 rounded" />
-                              <div className="h-3 w-12 bg-slate-200 dark:bg-slate-700 rounded" />
-                            </div>
-                            <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Updating risk preview...
                   </div>
                 )}
 
                 {previewError && <p className="text-sm text-red-600">{previewError}</p>}
 
-                {preview && !previewPending && (
+                {preview && (
                   <>
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Risk Score</p>

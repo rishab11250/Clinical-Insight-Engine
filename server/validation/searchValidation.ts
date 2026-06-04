@@ -103,6 +103,7 @@ export const searchQuerySchema = z.object({
   cursor: z.coerce
     .number()
     .int("Cursor must be an integer")
+    .min(1, "Cursor must be at least 1")
     .optional(),
 
   limit: z.coerce

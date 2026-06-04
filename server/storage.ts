@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { and, desc, eq, ilike, or, sql, lt } from "drizzle-orm";
+import { and, desc, eq, sql, ilike, or, lt } from "drizzle-orm";
 
 import {
   assessments,
@@ -9,22 +9,26 @@ import {
   type InsertAssessment,
   type AssessmentFactor,
   type User,
-  type InsertUser,
+  type InsertUser
 } from "@shared/schema";
 import type { RiskCategory } from "./validation/searchValidation";
 
 export interface IStorage {
-  getAssessments(limit?: number, cursor?: number, createdBy?: string): Promise<{ data: Assessment[]; nextCursor: number | null }>;
-  createAssessment(assessment: AssessmentCreateInput): Promise<Assessment>;
+  getAssessments(limit?: number, cursor?: number, createdBy?: string): Promise<Assessment[]>;
+  /**
+   * Searches assessments by risk category label using parameterized queries.
+   * Uses Drizzle ORM eq() — user input is NEVER interpolated into SQL strings.
+   */
   searchAssessments(
     searchTerm: string,
     createdBy?: string,
     riskCategory?: RiskCategory,
     limit?: number,
     cursor?: number
-  ): Promise<{ data: Assessment[]; nextCursor: number | null }>;
+  ): Promise<Assessment[]>;
   /** Returns a single assessment by numeric ID. Authorization must be checked by caller. */
   getAssessmentById(id: number): Promise<Assessment | undefined>;
+  createAssessment(assessment: any): Promise<Assessment>;
   createUser(data: InsertUser): Promise<User>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: string): Promise<User | undefined>;
@@ -90,11 +94,16 @@ export class DatabaseStorage implements IStorage {
         riskScore: assessments.riskScore,
         riskCategory: assessments.riskCategory,
         factors: assessments.factors,
-        confidenceInterval: assessments.confidenceInterval,
-        modelConfidence: assessments.modelConfidence,
-        createdBy: assessments.createdBy,
-        createdAt: assessments.createdAt,
-        userId: assessments.userId,
+        confidenceInterval:
+          (assessments as any).confidenceInterval ?? (assessments as any).confidence_interval,
+        modelConfidence:
+          (assessments as any).modelConfidence ?? (assessments as any).model_confidence,
+        createdAt:
+          (assessments as any).createdAt ?? (assessments as any).created_at,
+        createdBy:
+          (assessments as any).createdBy ?? (assessments as any).created_by,
+        userId:
+          (assessments as any).userId ?? (assessments as any).user_id,
       })
       .from(assessments)
       .orderBy(desc(assessments.id))
@@ -126,7 +135,7 @@ export class DatabaseStorage implements IStorage {
    * @param createdBy    Restrict results to this user's own records
    * @param riskCategory Optional filter: LOW | MODERATE | HIGH
    * @param limit        Maximum rows to return (default 20)
-   * @param offset       Pagination offset (default 0)
+   * @param cursor       Pagination cursor (id)
    */
   async searchAssessments(
     searchTerm: string,
@@ -177,6 +186,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(assessments.id))
       .$dynamic();
 
+    if (cursor) {
+      conditions.push(lt(assessments.id, cursor));
+    }
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
     }
@@ -220,7 +233,7 @@ export class DatabaseStorage implements IStorage {
 
     const [created] = await db
       .insert(assessments)
-      .values(assessment)
+      .values(assessment as any)
       .returning();
 
     return created;
