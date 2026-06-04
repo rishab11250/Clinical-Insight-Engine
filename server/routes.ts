@@ -279,8 +279,6 @@ interface PredictionResult {
   }>;
   clinicianAdvice: string[];
   patientAdvice: string[];
-  confidenceInterval?: string;
-  modelConfidence?: number;
 }
 
 function calculateClinicalFallback(input: unknown): PredictionResult {
@@ -428,8 +426,6 @@ function calculateClinicalFallback(input: unknown): PredictionResult {
           : [
             "Continue maintaining a healthy, balanced lifestyle and regular physical activity.",
           ],
-    confidenceInterval: `${Math.max(1, riskScore - 5)}% - ${Math.min(99, riskScore + 5)}%`,
-    modelConfidence: 0.95,
   };
 }
 
@@ -580,6 +576,7 @@ export async function registerRoutes(
           (isFallback
             ? " (Generated via fallback rule-based clinical support model due to system unavailability)"
             : "");
+        prediction.isFallback = isFallback;
 
         const assessment = await storage.createAssessment({
           ...input,
