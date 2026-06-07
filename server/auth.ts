@@ -3,6 +3,7 @@ import { randomInt, randomBytes } from "crypto";
 import bcrypt from "bcrypt";
 import { rateLimit } from "express-rate-limit";
 import { eq, and, gte, sql } from "drizzle-orm";
+import { issueToken } from "./services/auth/tokenValidator";
 import { storage } from "./storage";
 import { getDb } from "./db";
 import { users, emailVerificationTokens, passwordResetTokens } from "@shared/schema";
@@ -466,7 +467,7 @@ export function createAuthRouter(): Router {
 
       if (Date.now() > pending.expiresAt) {
         pendingOtps.delete(email);
-        await storage.recordLoginAudit({
+        storage.recordLoginAudit({
           ipAddress: req.ip,
           userAgent: req.headers["user-agent"],
           loginStatus: "otp_expired",
@@ -479,21 +480,21 @@ export function createAuthRouter(): Router {
 
         if (pending.attempts >= 3) {
           pendingOtps.delete(email);
-          await storage.recordLoginAudit({
+          storage.recordLoginAudit({
             ipAddress: req.ip,
             userAgent: req.headers["user-agent"],
             loginStatus: "otp_failed_lockout",
-          });
+          }).catch((err) => logger.error({ err }, "Failed to record OTP lockout audit"));
           return res.status(429).json({
             message: "Too many failed attempts. Please sign in again.",
           });
         }
 
-        await storage.recordLoginAudit({
+        storage.recordLoginAudit({
           ipAddress: req.ip,
           userAgent: req.headers["user-agent"],
           loginStatus: "otp_failed",
-        });
+        }).catch((err) => logger.error({ err }, "Failed to record OTP audit"));
         const remaining = 3 - pending.attempts;
         return res.status(401).json({
           message: `Invalid OTP. ${remaining} attempt(s) remaining.`,
@@ -535,7 +536,7 @@ export function createAuthRouter(): Router {
 
         id = user.id;
         name = user.fullName;
-        role = user.role ?? "DOCTOR";
+        role = user.role ?? "PATIENT";
         emailVerified = true;
       }
 
@@ -579,7 +580,7 @@ export function createAuthRouter(): Router {
 
       const db = getDb();
 
-      // Find the user
+      // Find the user (outside transaction — no race condition here)
       const [user] = await db
         .select()
         .from(users)
@@ -592,70 +593,99 @@ export function createAuthRouter(): Router {
 
       // If already verified, return success
       if (user.emailVerified) {
-        await establishAuthenticatedSession(req, { id: user.id, email: user.email, name: user.fullName, role: user.role ?? "DOCTOR", emailVerified: true });
+        await establishAuthenticatedSession(req, { id: user.id, email: user.email, name: user.fullName, role: user.role ?? "PATIENT", emailVerified: true });
         return res.json({ success: true, message: "Email already verified." });
       }
 
-      // Find an active, unexpired, unused token for this user
-      const [token] = await db
-        .select()
-        .from(emailVerificationTokens)
-        .where(
-          and(
-            eq(emailVerificationTokens.userId, user.id),
-            eq(emailVerificationTokens.used, false),
-            gte(emailVerificationTokens.expiresAt, new Date()),
-          ),
-        )
-        .orderBy(emailVerificationTokens.createdAt)
-        .limit(1);
+      // ── Atomic verification block ─────────────────────────────────────
+      // The transaction + guarded WHERE clauses prevent TOCTOU races:
+      // PostgreSQL's READ COMMITTED isolation ensures UPDATE/DELETE
+      // statements see the latest committed data, even within a transaction.
+      // If two concurrent requests both SELECT the same unused token, only
+      // the first UPDATE with `used = false` will succeed; the second will
+      // match 0 rows and return a conflict.
+      type VerifyOutcome =
+        | { success: true }
+        | { success: false; status: number; message: string };
 
-      if (!token) {
-        return res.status(400).json({
-          message: "No valid verification code found. Please request a new code.",
-        });
-      }
+      const outcome: VerifyOutcome = await db.transaction(async (tx) => {
+        const [token] = await tx
+          .select()
+          .from(emailVerificationTokens)
+          .where(
+            and(
+              eq(emailVerificationTokens.userId, user.id),
+              eq(emailVerificationTokens.used, false),
+              gte(emailVerificationTokens.expiresAt, new Date()),
+            ),
+          )
+          .orderBy(emailVerificationTokens.createdAt)
+          .limit(1);
 
-      // Check attempt count
-      const maxAttempts = 5;
-      if ((token.attemptCount ?? 0) >= maxAttempts) {
-        // Mark token as used to force a new one
-        await db
+        if (!token) {
+          return { success: false as const, status: 400, message: "No valid verification code found. Please request a new code." };
+        }
+
+        const maxAttempts = 5;
+        if ((token.attemptCount ?? 0) >= maxAttempts) {
+          // Mark token as used to force a new one
+          await tx
+            .update(emailVerificationTokens)
+            .set({ used: true })
+            .where(eq(emailVerificationTokens.id, token.id));
+
+          return { success: false as const, status: 429, message: "Too many failed attempts. Please request a new verification code." };
+        }
+
+        // Validate the code
+        if (token.verificationCode !== code) {
+          // Guard with used = false to avoid incrementing a claimed token
+          await tx
+            .update(emailVerificationTokens)
+            .set({ attemptCount: (token.attemptCount ?? 0) + 1 })
+            .where(and(
+              eq(emailVerificationTokens.id, token.id),
+              eq(emailVerificationTokens.used, false),
+            ));
+
+          const remaining = maxAttempts - (token.attemptCount ?? 0) - 1;
+          return {
+            success: false as const,
+            status: 401,
+            message: `Invalid code. ${remaining > 0 ? `${remaining} attempt(s) remaining.` : "Please request a new code."}`,
+          };
+        }
+
+        // Atomically claim the token — only succeeds if still unused
+        const [claimed] = await tx
           .update(emailVerificationTokens)
           .set({ used: true })
-          .where(eq(emailVerificationTokens.id, token.id));
+          .where(and(
+            eq(emailVerificationTokens.id, token.id),
+            eq(emailVerificationTokens.used, false),
+          ))
+          .returning();
 
-        return res.status(429).json({
-          message: "Too many failed attempts. Please request a new verification code.",
-        });
+        if (!claimed) {
+          // Another request already used this token — TOCTOU prevented
+          return { success: false as const, status: 409, message: "This code has already been used." };
+        }
+
+        // Mark user as verified
+        await tx
+          .update(users)
+          .set({ emailVerified: true, emailVerifiedAt: new Date(), updatedAt: new Date() })
+          .where(eq(users.id, user.id));
+
+        return { success: true as const };
+      });
+      // ── End atomic block ──────────────────────────────────────────────
+
+      if (!outcome.success) {
+        return res.status(outcome.status).json({ message: outcome.message });
       }
 
-      // Validate the code
-      if (token.verificationCode !== code) {
-        // Increment attempt count
-        await db
-          .update(emailVerificationTokens)
-          .set({ attemptCount: (token.attemptCount ?? 0) + 1 })
-          .where(eq(emailVerificationTokens.id, token.id));
-
-        const remaining = maxAttempts - (token.attemptCount ?? 0) - 1;
-        return res.status(401).json({
-          message: `Invalid code. ${remaining > 0 ? `${remaining} attempt(s) remaining.` : "Please request a new code."}`,
-        });
-      }
-
-      // Code is valid — mark token as used and user as verified
-      await db
-        .update(emailVerificationTokens)
-        .set({ used: true })
-        .where(eq(emailVerificationTokens.id, token.id));
-
-      await db
-        .update(users)
-        .set({ emailVerified: true, emailVerifiedAt: new Date(), updatedAt: new Date() })
-        .where(eq(users.id, user.id));
-
-      await establishAuthenticatedSession(req, { id: user.id, email: user.email, name: user.fullName, role: user.role ?? "DOCTOR", emailVerified: true });
+      await establishAuthenticatedSession(req, { id: user.id, email: user.email, name: user.fullName, role: user.role ?? "PATIENT", emailVerified: true });
 
       await storage.recordLoginAudit({
         userId: user.id,
@@ -789,6 +819,22 @@ export function createAuthRouter(): Router {
       logger.error({ err }, "Reset password error:");
       return res.status(500).json({ message: "Failed to reset password." });
     }
+  });
+
+  /**
+   * GET /api/auth/token
+   * Issues a JWT for an authenticated, verified user.
+   * Used by clients that require a bearer token for API access.
+   */
+  router.get("/token", requireAuth, requireVerified, (req, res) => {
+    const user = req.session.user as any;
+
+    if (!user?.id || !user?.email) {
+      return res.status(401).json({ message: "Invalid session user data" });
+    }
+
+    const token = issueToken(user.id, user.email, "provider");
+    res.json({ token });
   });
 
   return router;

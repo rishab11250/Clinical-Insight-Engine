@@ -4,7 +4,7 @@ import analyticsRouter from "./routes/analytics.routes";
 import uploadRouter from "./routes/upload.routes";
 import type { Express } from "express";
 import type { Server } from "http";
-import authRouter from "./routes/auth.routes";
+
 import assessmentsRouter from "./routes/assessments.routes";
 import { storage, type AssessmentCreateInput } from "./storage";
 import { requireAuth, requireAdmin, requireVerified } from "./auth";
@@ -282,8 +282,6 @@ export async function registerRoutes(
   });
 
   // Mount domain-specific routers
-  app.use("/api/auth", authRouter);
-  
   app.use("/api/assessments", generalLimiter, analyticsRouter);
   app.use("/api/assessments", mlRouter);
   app.use("/api/assessments", exportsRouter);
