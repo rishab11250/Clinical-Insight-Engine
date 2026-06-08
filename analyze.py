@@ -274,7 +274,7 @@ def get_model():
             current_hash = _compute_dataset_hash(DATA_FILE)
         return current_hash
 
-    from app.ml.security import verify_signature
+    from app.ml.security import verify_signature, safe_pickle_load
 
     if os.path.exists(MODEL_FILE):
         try:
@@ -284,7 +284,7 @@ def get_model():
                     "Refusing to load untrusted model file to prevent Remote Code Execution."
                 )
             with open(MODEL_FILE, 'rb') as f:
-                model_data = pickle.load(f)
+                model_data = safe_pickle_load(f)
             if isinstance(model_data, tuple) and len(model_data) >= 3:
                 model, scaler, features = model_data[:3]
                 cached_hash = model_data[3] if len(model_data) >= 4 else None
@@ -323,7 +323,7 @@ def get_model():
                         "Refusing to load untrusted model file to prevent Remote Code Execution."
                     )
                 with open(MODEL_FILE, 'rb') as f:
-                    model_data = pickle.load(f)
+                    model_data = safe_pickle_load(f)
                 if isinstance(model_data, tuple) and len(model_data) >= 3:
                     cached_hash = model_data[3] if len(model_data) >= 4 else None
                     cov_beta = model_data[4] if len(model_data) >= 5 else None
@@ -544,14 +544,36 @@ def interpret_predictions_batch(model, scaler, features, input_data_list, cov_be
 def interpret_prediction(model, scaler, features, input_data, cov_beta=None):
     """Interprets a single patient's data, yielding clinician and patient views."""
     res = interpret_predictions_batch(model, scaler, features, [input_data], cov_beta)
-    if isinstance(res, dict):
+    if isinstance(res, dict) and "error" in res:
         return res
-    return res[0]
+    if isinstance(res, list) and len(res) > 0:
+        return res[0]
+    return res
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "predict_file":
         if len(sys.argv) > 2:
-            with open(sys.argv[2], 'r') as f:
+            # SECURITY: Resolve the input path and validate it is within an
+            # allowed directory to prevent path traversal attacks.
+            # The Node backend always writes temp files to the OS temp directory;
+            # we also allow the script directory and CWD for test/CLI usage.
+            raw_input_path = sys.argv[2]
+            resolved_input = os.path.realpath(raw_input_path)
+            _allowed_dirs = {
+                os.path.realpath(SCRIPT_DIR),
+                os.path.realpath(tempfile.gettempdir()),
+                os.path.realpath(os.getcwd()),
+            }
+            if not any(
+                resolved_input == d or resolved_input.startswith(d + os.sep)
+                for d in _allowed_dirs
+            ):
+                print(
+                    "Error: Access denied. File path resolves outside allowed directories.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            with open(resolved_input, 'r') as f:
                 data = json.load(f)
         else:
             data = json.load(sys.stdin)
