@@ -29,7 +29,7 @@ import {
   startAssessmentWorker,
   closeQueue,
 } from "./queue";
-import { EmailConfigurationError, validateSmtpConfig } from "./email";
+import { EmailConfigurationError, validateEmailConfig } from "./email";
 import { generalLimiter } from "./middleware/rateLimit";
 
 const execFileAsync = promisify(execFile);
@@ -213,7 +213,7 @@ app.use((req, res, next) => {
   }
 
   try {
-    validateSmtpConfig();
+    validateEmailConfig();
   } catch (error) {
     if (error instanceof EmailConfigurationError) {
       logger.error({ err: error }, error.message);
