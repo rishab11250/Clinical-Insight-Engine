@@ -6,12 +6,10 @@ import { rateLimit } from "express-rate-limit";
 import { requireAuth, requireVerified } from "../auth";
 import { api } from "@shared/routes";
 import { storage } from "../storage";
-<<<<<<< HEAD
-import { MLService, isPythonAvailable, calculateClinicalFallback } from "../services/mlService";
-=======
 import { MLService, calculateClinicalFallback } from "../services/mlService";
 import { assessmentLimiter, previewLimiter } from "../middleware/rateLimit";
->>>>>>> 63d29afa01cbf3b34bd8d95bbba2bfd44c2338a2
+import { MLService, isPythonAvailable, calculateClinicalFallback } from "../services/mlService";
+
 import { generateRecommendations } from "../services/recommendation-engine";
 import {
   sanitizeDatabaseError,

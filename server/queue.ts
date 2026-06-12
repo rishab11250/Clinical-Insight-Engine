@@ -1,36 +1,9 @@
 import { Queue, Worker, Job } from "bullmq";
 import { storage } from "./storage";
 import IORedis from "ioredis";
-import { safeExecFile } from "./utils/exec";
-import { promisify } from "util";
-import path from "path";
-import os from "os";
-import { randomUUID } from "crypto";
-import { writeFile, unlink } from "fs/promises";
-import { existsSync } from "fs";
-import { fileURLToPath } from "url";
 import { sendCriticalRiskAlert } from "./email";
 import { logger } from "./logger";
-
-export function getPythonExecutable() {
-  const candidates = process.platform === "win32"
-    ? [
-        path.resolve(".venv", "Scripts", "python.exe"),
-        path.resolve("venv", "Scripts", "python.exe")
-      ]
-    : [
-        path.resolve(".venv", "bin", "python"),
-        path.resolve("venv", "bin", "python")
-      ];
-
-  return candidates.find((candidate) => existsSync(candidate)) ?? (process.platform === "win32" ? "python" : "python3");
-}
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const analyzePyPath = path.resolve(__dirname, "..", "analyze.py");
-
-
+import { MLService } from "./services/mlService";
 
 let redisConnectionInstance: IORedis | null = null;
 let assessmentQueueInstance: Queue | null = null;
@@ -105,12 +78,9 @@ export function startAssessmentWorker(): void {
     "assessmentQueue",
     async (job: Job) => {
       const { input, userId, userEmail } = job.data;
-      const { isPythonAvailable, calculateClinicalFallback } = await import("./services/mlService");
-
-      const tempFile = path.join(os.tmpdir(), `${randomUUID()}.json`);
 
       try {
-<<<<<<< HEAD
+        const { prediction } = await MLService.runAssessmentInference(input);
         let prediction: any;
         
         if (!isPythonAvailable) {
@@ -120,12 +90,6 @@ export function startAssessmentWorker(): void {
           const stdout = await new Promise<string>((resolve, reject) => {
             const child = execFile(
               getPythonExecutable(),
-=======
-        await writeFile(tempFile, JSON.stringify(input));
-        const stdout = await new Promise<string>((resolve, reject) => {
-          const child = safeExecFile(
-            getPythonExecutable(),
->>>>>>> 63d29afa01cbf3b34bd8d95bbba2bfd44c2338a2
             [analyzePyPath, "predict_file", tempFile],
             {
               timeout: 60000,
@@ -157,6 +121,7 @@ export function startAssessmentWorker(): void {
             throw new Error(prediction.error);
           }
         }
+
 
         prediction.disclaimer =
             "DISCLAIMER: This is a clinical decision support tool and is not a medical diagnosis. Please consult with a healthcare professional for clinical decisions.";
@@ -195,16 +160,10 @@ export function startAssessmentWorker(): void {
           prediction
         };
       } catch (err: any) {
-        if (err.killed || err.signal === "SIGTERM") {
+        if (err.message === "Clinical assessment timed out." || err.message?.includes("timed out")) {
           throw new Error("Clinical assessment generation timed out.");
         }
         throw err;
-      } finally {
-        try {
-          await unlink(tempFile);
-        } catch (e) {
-          // ignore
-        }
       }
     },
     {

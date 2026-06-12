@@ -2,34 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express from "express";
 import session from "express-session";
-import { createAuthRouter, pendingOtps } from "../server/auth";
-
-// Mock the db module to return our mock user on query
-vi.mock("../server/db", async (importOriginal) => {
-  const original = (await importOriginal()) as any;
-  return {
-    ...original,
-    getDb: () => ({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [
-              {
-                id: "test-user-id",
-                fullName: "Test Doctor",
-                email: "doc@example.com",
-                medicalLicenseNumber: "DOC123",
-                passwordHash: "$2b$10$UnqO1D.K2i8e.3yY4/pZkO/rQhZz7xI7TfX6f4r4uYgG0p0p0p0p.",
-                role: "provider",
-                isActive: true,
-                emailVerified: true,
-              }
-            ]
-          })
-        })
-      })
-    })
-  };
 
 // Mock rate limiting to prevent test blocks
 vi.mock("express-rate-limit", () => {

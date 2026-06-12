@@ -11,7 +11,6 @@ import { MLService, generateRequestFingerprint, calculateClinicalFallback, getPy
 import { storage, type AssessmentCreateInput } from "./storage";
 import { requireAuth, requireAdmin, requireVerified } from "./auth";
 import bcrypt from "bcrypt";
-<<<<<<< HEAD
 import { api } from "@shared/routes";
 import { z } from "zod";
 import os from "os";
@@ -24,8 +23,12 @@ import { logAccessAttempt } from "./security/access-audit";
 import { sanitizeDatabaseError, analyzeSearchInput, logSecurityEvent } from "./security/sqlProtection";
 import { searchQuerySchema } from "./validation/searchValidation";
 import { assessmentsToCsv } from "./utils/csvExport";
-=======
-import { logger } from "./logger";
+import {
+  generalLimiter,
+  adminLimiter,
+} from "./middleware/rateLimit";
+import { rateLimit } from "express-rate-limit";
+import { getAssessmentQueue } from "./queue";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { z } from "zod";
@@ -35,6 +38,25 @@ import os from "os";
 import { randomUUID } from "crypto";
 import { writeFile, unlink } from "fs/promises";
 import { fileURLToPath } from "url";
+import bcrypt from "bcrypt";
+import { validateDTO } from "./middleware/validateDTO";
+import { z } from "zod";
+import { api } from "@shared/routes";
+import { assessmentsToCsv } from "./utils/csvExport";
+import { searchQuerySchema } from "./validation/searchValidation";
+import {
+  sanitizeDatabaseError,
+  analyzeSearchInput,
+  logSecurityEvent,
+} from "./security/sqlProtection";
+import { canAccessPatientRecord } from "./services/authz/patient-access";
+import { logAccessAttempt } from "./security/access-audit";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const analyzePyPath = path.resolve(__dirname, "..", "analyze.py");
+
+function execFileAsync(file: string, args: string[], options: any): Promise<{ stdout: string; stderr: string }> {
 import { api } from "@shared/routes";
 import { getPythonExecutable, calculateClinicalFallback, generateRequestFingerprint, MLService } from "./services/mlService";
 import { validateDTO } from "./middleware/validateDTO";
@@ -44,9 +66,9 @@ import { searchQuerySchema } from "./validation/searchValidation";
 import { analyzeSearchInput, logSecurityEvent, sanitizeDatabaseError } from "./security/sqlProtection";
 import { canAccessPatientRecord } from "./services/authz/patient-access";
 import { logAccessAttempt } from "./security/access-audit";
->>>>>>> 63d29afa01cbf3b34bd8d95bbba2bfd44c2338a2
 
 function execFileAsync(file: string, args: string[], options: { timeout: number; maxBuffer?: number }): Promise<{ stdout: string; stderr: string }> {
+
   return new Promise((resolve, reject) => {
     execFile(file, args, options, (error, stdout, stderr) => {
       if (error) {
