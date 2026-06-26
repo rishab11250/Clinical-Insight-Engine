@@ -10,8 +10,8 @@ import { validateDTO } from "./middleware/validateDTO";
 import { registerDTOSchema, loginDTOSchema, forgotPasswordDTOSchema, resetPasswordDTOSchema, verifyEmailDTOSchema, verifyOtpDTOSchema } from "./validation/auth.dto";
 import { AuthRepository } from "./repositories/auth.repository";
 import { getDb } from "./db";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { passwordResetTokens, users } from "@shared/schema";
-import { eq, and, gte, sql } from "drizzle-orm";
 
 const authRepository = new AuthRepository();
 
@@ -120,13 +120,7 @@ function setPendingOtp(email: string, value: { otp: string; expiresAt: number; a
 }
 
 function getPendingOtp(email: string) {
-  const entry = _pendingOtps.get(email);
-  if (!entry) return undefined;
-  if (Date.now() > entry.expiresAt) {
-    _pendingOtps.delete(email);
-    return undefined;
-  }
-  return entry;
+  return _pendingOtps.get(email);
 }
 
 function deletePendingOtp(email: string) {
@@ -148,7 +142,10 @@ export const pendingOtps = {
   get: getPendingOtp,
   set: setPendingOtp,
   delete: deletePendingOtp,
-  has: (email: string) => getPendingOtp(email) !== undefined,
+  has: (email: string) => {
+    const entry = _pendingOtps.get(email);
+    return entry !== undefined && Date.now() <= entry.expiresAt;
+  },
   get size() { return _pendingOtps.size; },
   [Symbol.iterator]() { return _pendingOtps[Symbol.iterator](); },
 } as unknown as Map<string, { otp: string; expiresAt: number; attempts: number }>;
