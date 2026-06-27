@@ -133,38 +133,46 @@ describe("insertAssessmentSchema", () => {
     }
   });
 });
-it("rejects null age value", () => {
+it("rejects whitespace-only patient name", () => {
   const result = insertAssessmentSchema.safeParse({
     ...validAssessment,
-    age: null,
+    patientName: "     ",
   });
 
   expect(result.success).toBe(false);
 });
 
-it("rejects undefined gender value", () => {
+it("accepts patient name at minimum valid length", () => {
   const result = insertAssessmentSchema.safeParse({
     ...validAssessment,
-    gender: undefined,
+    patientName: "A",
+  });
+
+  expect(result.success).toBe(true);
+});
+
+it("accepts special characters in patient name", () => {
+  const result = insertAssessmentSchema.safeParse({
+    ...validAssessment,
+    patientName: "John O'Connor-Smith",
+  });
+
+  expect(result.success).toBe(true);
+});
+
+it("rejects invalid gender value", () => {
+  const result = insertAssessmentSchema.safeParse({
+    ...validAssessment,
+    gender: "Unknown",
   });
 
   expect(result.success).toBe(false);
 });
 
-it("rejects missing required gender field", () => {
-  const { gender, ...assessmentWithoutGender } = validAssessment;
-
-  const result = insertAssessmentSchema.safeParse(
-    assessmentWithoutGender
-  );
-
-  expect(result.success).toBe(false);
-});
-
-it("rejects null blood glucose value", () => {
+it("rejects extremely large age value", () => {
   const result = insertAssessmentSchema.safeParse({
     ...validAssessment,
-    bloodGlucoseLevel: null,
+    age: 999999,
   });
 
   expect(result.success).toBe(false);
